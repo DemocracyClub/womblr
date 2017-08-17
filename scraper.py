@@ -101,7 +101,7 @@ for election in elections:
 
 if len(slack_messages) > MAX_OUTPUT_LINES:
     slack_message = "\n".join(slack_messages[:MAX_OUTPUT_LINES])
-    slack_message += "\n" + "...for more details see [insert url here]"
+    slack_message += "\n" + "...for more details see <https://morph.io/DemocracyClub/womblr>"
 else:
     slack_message = "\n".join(slack_messages)
 
