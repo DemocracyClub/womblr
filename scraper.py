@@ -86,6 +86,8 @@ scraperwiki.sqlite.save(
 
 print('=====')
 
+# sort elections by date
+elections = sorted(elections, key=lambda k: k['poll_open_date'])
 
 # assemble slack mesages
 slack_messages = [':satellite_antenna: *Elections happening in the next month* :rotating_light:']
