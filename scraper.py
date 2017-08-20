@@ -1,6 +1,7 @@
 import csv
 import datetime
 import os
+import random
 import requests
 import time
 from dateutil.relativedelta import relativedelta
@@ -48,6 +49,22 @@ def call_ynr(url):
     cr = csv.reader(decoded_content.splitlines(), delimiter=',')
     return list(cr)
 
+def get_emoji():
+    return random.choice([
+        ':satellite_antenna:',
+        ':rotating_light:',
+        ':ballot_box_with_ballot:',
+        ':mega:',
+        ':alarm_clock:',
+        ':phone:',
+    ])
+
+def get_title():
+    return random.choice([
+        'Elections happening in the next month',
+        'Election update!',
+        'Elections coming up this month',
+    ])
 
 # get a list of upcoming elections
 ee_url = "https://elections.democracyclub.org.uk/api/elections.json?future=1&limit=100"
@@ -90,7 +107,7 @@ print('=====')
 elections = sorted(elections, key=lambda k: k['poll_open_date'])
 
 # assemble slack mesages
-slack_messages = [':satellite_antenna: *Elections happening in the next month* :rotating_light:']
+slack_messages = [get_emoji() + ' *' + get_title() + '* ' + get_emoji()]
 for election in elections:
     message = "%s: <%s|%s>. known candidates: %s" % (
         election['poll_open_date'],
