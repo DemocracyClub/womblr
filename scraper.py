@@ -21,18 +21,6 @@ SLACK_WEBHOOK_URL = os.environ['MORPH_SLACK_WEBHOOK_URL']
 NOW = datetime.datetime.now()
 
 
-try:
-    latest = scraperwiki.sql.select("MAX(timestamp) AS ts FROM 'data';")
-    last_run = datetime.datetime.strptime(latest[0]['ts'], '%Y-%m-%d %H:%M:%S.%f')
-    if last_run + UPDATE_FREQUENCY > NOW:
-        print('Nothing to do today..')
-        quit()
-except OperationalError:
-    # The first time we run the scraper it will throw
-    # because the table doesn't exist yet
-    pass
-
-
 def post_slack_message(message):
     slack = SlackClient(SLACK_WEBHOOK_URL)
     slack.post_message(message)
@@ -66,64 +54,85 @@ def get_title():
         'Elections coming up this month',
     ])
 
-# get a list of upcoming elections
-ee_url = "https://elections.democracyclub.org.uk/api/elections.json?future=1&limit=100"
-elections = []
-while ee_url:
-    print(ee_url)
-    ee_data = call_ee(ee_url)
+def get_slack_message(elections):
+    # sort elections by date
+    elections = sorted(elections, key=lambda k: k['poll_open_date'])
 
-    if ee_data['results']:
-        for result in ee_data['results']:
-            election_datetime = datetime.datetime.strptime(result['poll_open_date'], '%Y-%m-%d')
-            threshold_date = NOW + ELECTIONS_IN_SCOPE
-            if result['group_type'] == "organisation" and election_datetime < threshold_date:
-                # get details of any candidates we hold for this election
-                election_id = result['election_id']
-                ynr_url = "https://candidates.democracyclub.org.uk/media/candidates-%s.csv" % (election_id)
-                print(ynr_url)
-                ynr_data = call_ynr(ynr_url)
-                elections.append({
-                    'timestamp': NOW,
-                    'id': election_id,
-                    'name': result['election_title'],
-                    'known_candidates': len(ynr_data)-1,
-                    'poll_open_date': result['poll_open_date'],
-                    'url': "https://candidates.democracyclub.org.uk/election/%s/constituencies" % (election_id)
-                })
-                time.sleep(2)  # have a little snooze to avoid hammering the api
+    # assemble slack mesages
+    slack_messages = [get_emoji() + ' *' + get_title() + '* ' + get_emoji()]
+    for election in elections:
+        message = "%s: <%s|%s>. known candidates: %s" % (
+            election['poll_open_date'],
+            election['url'],
+            election['name'],
+            election['known_candidates'])
+        if election['known_candidates'] == 0:
+            message += " :womble: required"
+        slack_messages.append(message)
 
-    time.sleep(1)  # have a little snooze to avoid hammering the api
-    ee_url = ee_data['next']
+    if len(slack_messages) > MAX_OUTPUT_LINES:
+        slack_message = "\n".join(slack_messages[:MAX_OUTPUT_LINES])
+        slack_message += "\n" + "...for more details see <https://morph.io/DemocracyClub/womblr>"
+    else:
+        slack_message = "\n".join(slack_messages)
+
+    return slack_message
+
+def get_elections():
+    elections = []
+    # get a list of upcoming elections
+    ee_url = "https://elections.democracyclub.org.uk/api/elections.json?future=1&limit=100"
+    while ee_url:
+        print(ee_url)
+        ee_data = call_ee(ee_url)
+
+        if ee_data['results']:
+            for result in ee_data['results']:
+                election_datetime = datetime.datetime.strptime(result['poll_open_date'], '%Y-%m-%d')
+                threshold_date = NOW + ELECTIONS_IN_SCOPE
+                if result['group_type'] == "organisation" and election_datetime < threshold_date:
+                    # get details of any candidates we hold for this election
+                    election_id = result['election_id']
+                    ynr_url = "https://candidates.democracyclub.org.uk/media/candidates-%s.csv" % (election_id)
+                    print(ynr_url)
+                    ynr_data = call_ynr(ynr_url)
+                    elections.append({
+                        'timestamp': NOW,
+                        'id': election_id,
+                        'name': result['election_title'],
+                        'known_candidates': len(ynr_data)-1,
+                        'poll_open_date': result['poll_open_date'],
+                        'url': "https://candidates.democracyclub.org.uk/election/%s/constituencies" % (election_id)
+                    })
+                    time.sleep(2)  # have a little snooze to avoid hammering the api
+
+        time.sleep(1)  # have a little snooze to avoid hammering the api
+        ee_url = ee_data['next']
+
+    return elections
 
 
-# shove it all in the database
-scraperwiki.sqlite.save(
-    unique_keys=['timestamp', 'id'], data=elections, table_name='data')
+try:
+    latest = scraperwiki.sql.select("MAX(timestamp) AS ts FROM 'data';")
+    last_run = datetime.datetime.strptime(latest[0]['ts'], '%Y-%m-%d %H:%M:%S.%f')
+    if last_run + UPDATE_FREQUENCY > NOW:
+        print("Nothing to do today, but here's the results from the last run..")
+        elections = scraperwiki.sql.select(
+            "* FROM 'data' WHERE timestamp=?;", [latest[0]['ts']])
+    else:
+        elections = get_elections()
+        scraperwiki.sqlite.save(
+            unique_keys=['timestamp', 'id'], data=elections, table_name='data')
+except OperationalError:
+    # The first time we run the scraper it will throw
+    # because the table doesn't exist yet
+    elections = get_elections()
+    scraperwiki.sqlite.save(
+        unique_keys=['timestamp', 'id'], data=elections, table_name='data')
 
 print('=====')
 
-# sort elections by date
-elections = sorted(elections, key=lambda k: k['poll_open_date'])
-
-# assemble slack mesages
-slack_messages = [get_emoji() + ' *' + get_title() + '* ' + get_emoji()]
-for election in elections:
-    message = "%s: <%s|%s>. known candidates: %s" % (
-        election['poll_open_date'],
-        election['url'],
-        election['name'],
-        election['known_candidates'])
-    if election['known_candidates'] == 0:
-        message += " :womble: required"
-    slack_messages.append(message)
-
-if len(slack_messages) > MAX_OUTPUT_LINES:
-    slack_message = "\n".join(slack_messages[:MAX_OUTPUT_LINES])
-    slack_message += "\n" + "...for more details see <https://morph.io/DemocracyClub/womblr>"
-else:
-    slack_message = "\n".join(slack_messages)
-
+slack_message = get_slack_message(elections)
 
 print(slack_message)
 # post it
