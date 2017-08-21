@@ -111,6 +111,15 @@ def get_elections():
 
     return elections
 
+def scrape():
+    elections = get_elections()
+    scraperwiki.sqlite.save(
+        unique_keys=['timestamp', 'id'], data=elections, table_name='data')
+    print('=====')
+    slack_message = get_slack_message(elections)
+    print(slack_message)
+    post_slack_message(slack_message)
+
 
 try:
     latest = scraperwiki.sql.select("MAX(timestamp) AS ts FROM 'data';")
@@ -119,21 +128,12 @@ try:
         print("Nothing to do today, but here's the results from the last run..")
         elections = scraperwiki.sql.select(
             "* FROM 'data' WHERE timestamp=?;", [latest[0]['ts']])
+        print('=====')
+        slack_message = get_slack_message(elections)
+        print(slack_message)
     else:
-        elections = get_elections()
-        scraperwiki.sqlite.save(
-            unique_keys=['timestamp', 'id'], data=elections, table_name='data')
+        scrape()
 except OperationalError:
     # The first time we run the scraper it will throw
     # because the table doesn't exist yet
-    elections = get_elections()
-    scraperwiki.sqlite.save(
-        unique_keys=['timestamp', 'id'], data=elections, table_name='data')
-
-print('=====')
-
-slack_message = get_slack_message(elections)
-
-print(slack_message)
-# post it
-post_slack_message(slack_message)
+    scrape()
