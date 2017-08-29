@@ -54,6 +54,9 @@ def get_title():
         'Elections coming up this month',
     ])
 
+def format_date(d):
+    return datetime.datetime.strptime(d, "%Y-%m-%d").strftime("%d/%m/%Y")
+
 def get_slack_message(elections):
     # sort elections by date
     elections = sorted(elections, key=lambda k: k['poll_open_date'])
@@ -62,7 +65,7 @@ def get_slack_message(elections):
     slack_messages = [get_emoji() + ' *' + get_title() + '* ' + get_emoji()]
     for election in elections:
         message = "%s: <%s|%s>. known candidates: %s" % (
-            election['poll_open_date'],
+            format_date(election['poll_open_date']),
             election['url'],
             election['name'],
             election['known_candidates'])
