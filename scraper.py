@@ -17,7 +17,10 @@ import scraperwiki
 UPDATE_FREQUENCY = relativedelta(weeks=1)
 ELECTIONS_IN_SCOPE = relativedelta(months=1)
 MAX_OUTPUT_LINES = 30
-SLACK_WEBHOOK_URL = os.environ['MORPH_SLACK_WEBHOOK_URL']
+try:
+    SLACK_WEBHOOK_URL = os.environ['MORPH_SLACK_WEBHOOK_URL']
+except KeyError:
+    SLACK_WEBHOOK_URL = None
 NOW = datetime.datetime.now()
 
 
@@ -121,7 +124,8 @@ def scrape():
     print('=====')
     slack_message = get_slack_message(elections)
     print(slack_message)
-    post_slack_message(slack_message)
+    if SLACK_WEBHOOK_URL:
+        post_slack_message(slack_message)
 
 
 try:
