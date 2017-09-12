@@ -28,16 +28,16 @@ def post_slack_message(message):
     slack = SlackClient(SLACK_WEBHOOK_URL)
     slack.post_message(message)
 
-def call_ee(url):
+def call_json_api(url):
     res = requests.get(url)
     res.raise_for_status()
     return res.json()
 
-def call_ynr(url):
+def call_csv_api(url):
     res = requests.get(url)
     res.raise_for_status()
     decoded_content = res.content.decode('utf-8')
-    cr = csv.reader(decoded_content.splitlines(), delimiter=',')
+    cr = csv.DictReader(decoded_content.splitlines(), delimiter=',')
     return list(cr)
 
 def get_emoji():
@@ -74,6 +74,8 @@ def get_slack_message(elections):
             election['known_candidates'])
         if election['known_candidates'] == 0:
             message += " :womble: required"
+        if 'locked' in election and election['locked']:
+            message += " :lock:"
         slack_messages.append(message)
 
     if len(slack_messages) > MAX_OUTPUT_LINES:
@@ -84,13 +86,32 @@ def get_slack_message(elections):
 
     return slack_message
 
+def get_posts(candidates):
+    posts = {}
+    for candidate in candidates:
+        if candidate['post_id'] not in posts:
+            posts[candidate['post_id']] = {
+                'known_candidates': 1,
+                'locked': False
+            }
+            ynr_url = 'https://candidates.democracyclub.org.uk/api/v0.9/posts/' + candidate['post_id']
+            print(ynr_url)
+            post = call_json_api(ynr_url)
+            posts[candidate['post_id']]['label'] = post['label']
+            for election in post['elections']:
+                if election['id'] == candidate['election']:
+                    posts[candidate['post_id']]['locked'] = election['candidates_locked']
+        else:
+            posts[candidate['post_id']]['known_candidates'] += 1
+    return posts
+
 def get_elections():
     elections = []
     # get a list of upcoming elections
     ee_url = "https://elections.democracyclub.org.uk/api/elections.json?future=1&limit=100"
     while ee_url:
         print(ee_url)
-        ee_data = call_ee(ee_url)
+        ee_data = call_json_api(ee_url)
 
         if ee_data['results']:
             for result in ee_data['results']:
@@ -103,19 +124,35 @@ def get_elections():
                     print(ynr_url)
 
                     try:
-                        ynr_data = call_ynr(ynr_url)
-                        total_candidates = len(ynr_data)-1
+                        ynr_data = call_csv_api(ynr_url)
+                        total_candidates = len(ynr_data)
+                        posts = get_posts(ynr_data)
                     except requests.exceptions.HTTPError:
                         total_candidates = 0
 
-                    elections.append({
-                        'timestamp': NOW,
-                        'id': election_id,
-                        'name': result['election_title'],
-                        'known_candidates': total_candidates,
-                        'poll_open_date': result['poll_open_date'],
-                        'url': "https://candidates.democracyclub.org.uk/election/%s/constituencies" % (election_id)
-                    })
+                    if total_candidates == 0 or not posts:
+                        elections.append({
+                            'timestamp': NOW,
+                            'id': election_id,
+                            'name': result['election_title'],
+                            'known_candidates': total_candidates,
+                            'poll_open_date': result['poll_open_date'],
+                            'url': "https://candidates.democracyclub.org.uk/election/%s/constituencies" % (election_id),
+                            'post_id': None,
+                            'locked': False,
+                        })
+                    else:
+                        for post in posts:
+                            elections.append({
+                                'timestamp': NOW,
+                                'id': election_id,
+                                'name': "%s - %s" % (result['election_title'], posts[post]['label']),
+                                'known_candidates': posts[post]['known_candidates'],
+                                'poll_open_date': result['poll_open_date'],
+                                'url': "https://candidates.democracyclub.org.uk/election/%s/post/%s" % (election_id, post),
+                                'post_id': post,
+                                'locked': posts[post]['locked'],
+                            })
                     time.sleep(2)  # have a little snooze to avoid hammering the api
 
         time.sleep(1)  # have a little snooze to avoid hammering the api
