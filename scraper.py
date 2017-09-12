@@ -101,12 +101,18 @@ def get_elections():
                     election_id = result['election_id']
                     ynr_url = "https://candidates.democracyclub.org.uk/media/candidates-%s.csv" % (election_id)
                     print(ynr_url)
-                    ynr_data = call_ynr(ynr_url)
+
+                    try:
+                        ynr_data = call_ynr(ynr_url)
+                        total_candidates = len(ynr_data)-1
+                    except requests.exceptions.HTTPError:
+                        total_candidates = 0
+
                     elections.append({
                         'timestamp': NOW,
                         'id': election_id,
                         'name': result['election_title'],
-                        'known_candidates': len(ynr_data)-1,
+                        'known_candidates': total_candidates,
                         'poll_open_date': result['poll_open_date'],
                         'url': "https://candidates.democracyclub.org.uk/election/%s/constituencies" % (election_id)
                     })
