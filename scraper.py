@@ -163,7 +163,7 @@ def get_elections():
 def scrape():
     elections = get_elections()
     scraperwiki.sqlite.save(
-        unique_keys=['timestamp', 'id'], data=elections, table_name='data')
+        unique_keys=['timestamp', 'id', 'post_id'], data=elections, table_name='data')
     print('=====')
     slack_message = get_slack_message(elections)
     print(slack_message)
