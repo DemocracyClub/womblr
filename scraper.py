@@ -18,7 +18,7 @@ UPDATE_FREQUENCY = relativedelta(weeks=1)
 ELECTIONS_IN_SCOPE = relativedelta(months=1)
 MAX_OUTPUT_LINES = 30
 try:
-    SLACK_WEBHOOK_URL = os.environ['MORPH_SLACK_WEBHOOK_URL']
+    SLACK_WEBHOOK_URL = os.environ['MORPH_ORINOCO_SLACK_WEBHOOK_URL']
 except KeyError:
     SLACK_WEBHOOK_URL = None
 NOW = datetime.datetime.now()
