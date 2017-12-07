@@ -52,9 +52,9 @@ def get_emoji():
 
 def get_title():
     return random.choice([
-        'Elections happening in the next month',
-        'Election update!',
-        'Elections coming up this month',
+        'By-Elections happening in the next month',
+        'By-Election update!',
+        'By-Elections coming up this month',
     ])
 
 def format_date(d):
