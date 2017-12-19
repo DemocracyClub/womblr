@@ -6,7 +6,6 @@ import requests
 import time
 from dateutil.relativedelta import relativedelta
 from polling_bot.brain import SlackClient
-from sqlalchemy.exc import OperationalError
 
 # hack to override sqlite database filename
 # see: https://help.morph.io/t/using-python-3-with-morph-scraperwiki-fork/148
@@ -23,6 +22,23 @@ except KeyError:
     SLACK_WEBHOOK_URL = None
 NOW = datetime.datetime.now()
 
+
+def init():
+    scraperwiki.sql.execute("""
+        CREATE TABLE IF NOT EXISTS data (
+            post_id TEXT,
+            id TEXT,
+            timestamp DATETIME,
+            url TEXT,
+            poll_open_date TEXT,
+            locked BOOLEAN,
+            name TEXT,
+            known_candidates BIGINT,
+            CHECK (locked IN (0, 1))
+        );""")
+    scraperwiki.sql.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS data_timestamp_id_postid_unique
+        ON data (timestamp, id, post_id);""")
 
 def post_slack_message(message):
     slack = SlackClient(SLACK_WEBHOOK_URL)
@@ -171,19 +187,21 @@ def scrape():
         post_slack_message(slack_message)
 
 
-try:
-    latest = scraperwiki.sql.select("MAX(timestamp) AS ts FROM 'data';")
-    last_run = datetime.datetime.strptime(latest[0]['ts'], '%Y-%m-%d %H:%M:%S.%f')
-    if last_run + UPDATE_FREQUENCY > NOW:
-        print("Nothing to do today, but here's the results from the last run..")
-        elections = scraperwiki.sql.select(
-            "* FROM 'data' WHERE timestamp=?;", [latest[0]['ts']])
-        print('=====')
-        slack_message = get_slack_message(elections)
-        print(slack_message)
-    else:
-        scrape()
-except OperationalError:
-    # The first time we run the scraper it will throw
-    # because the table doesn't exist yet
+init() # make sure our tables exist
+latest = scraperwiki.sql.select("MAX(timestamp) AS ts FROM 'data';")
+
+if latest[0]['ts'] is None:
+    # this is the first time we've ever run
+    scrape()
+    raise SystemExit(0)
+
+last_run = datetime.datetime.strptime(latest[0]['ts'], '%Y-%m-%d %H:%M:%S.%f')
+if last_run + UPDATE_FREQUENCY > NOW:
+    print("Nothing to do today, but here's the results from the last run..")
+    elections = scraperwiki.sql.select(
+        "* FROM 'data' WHERE timestamp=?;", [latest[0]['ts']])
+    print('=====')
+    slack_message = get_slack_message(elections)
+    print(slack_message)
+else:
     scrape()
