@@ -133,7 +133,7 @@ def get_elections():
             for result in ee_data['results']:
                 election_datetime = datetime.datetime.strptime(result['poll_open_date'], '%Y-%m-%d')
                 threshold_date = NOW + ELECTIONS_IN_SCOPE
-                if result['group_type'] == "organisation" and election_datetime < threshold_date:
+                if result['group_type'] and result['group_type'] != 'election' and election_datetime < threshold_date:
                     # get details of any candidates we hold for this election
                     election_id = result['election_id']
                     ynr_url = "https://candidates.democracyclub.org.uk/media/candidates-%s.csv" % (election_id)
