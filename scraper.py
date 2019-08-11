@@ -6,6 +6,8 @@ import requests
 import time
 from dateutil.relativedelta import relativedelta
 from polling_bot.brain import SlackClient
+from sopn_publish_date import StatementPublishDate, Country
+from sopn_publish_date.election_ids import type_and_poll_date
 
 # hack to override sqlite database filename
 # see: https://help.morph.io/t/using-python-3-with-morph-scraperwiki-fork/148
@@ -21,6 +23,7 @@ try:
 except KeyError:
     SLACK_WEBHOOK_URL = None
 NOW = datetime.datetime.now()
+SOPN_PUBLISH_DATE = StatementPublishDate()
 
 
 def init():
@@ -34,6 +37,7 @@ def init():
             locked BOOLEAN,
             name TEXT,
             known_candidates BIGINT,
+            sopn_published TEXT,
             CHECK (locked IN (0, 1))
         );""")
     scraperwiki.sql.execute("""
@@ -92,6 +96,11 @@ def get_slack_message(elections):
             message += " :womble: required"
         if 'locked' in election and election['locked']:
             message += " :lock:"
+        if election['sopn_published'] < str(datetime.date.today()):
+            message += " (SoPN should be published)"
+        else:
+            message += " (SoPN due %s)" % format_date(election['sopn_published'])
+
         slack_messages.append(message)
 
     if len(slack_messages) > MAX_OUTPUT_LINES:
@@ -121,6 +130,32 @@ def get_posts(candidates):
             posts[candidate['post_id']]['known_candidates'] += 1
     return posts
 
+
+def get_sopn_date(result):
+    slug = result['election_id']
+    territory = result['organisation']['territory_code']
+
+    country = {
+        "ENG": Country.ENGLAND,
+        "WLS": Country.WALES,
+        "SCT": Country.SCOTLAND,
+        "NIR": Country.NORTHERN_IRELAND,
+    }
+
+    if slug.startswith("local") and territory not in country:
+        return None
+
+    if slug.startswith("local") and territory is not None:
+
+        (_, date_of_poll) = type_and_poll_date(slug)
+
+        return SOPN_PUBLISH_DATE.local(
+            date_of_poll, country=country[territory]
+        )
+    else:
+        return SOPN_PUBLISH_DATE.for_id(slug)
+
+
 def get_elections():
     elections = []
     # get a list of upcoming elections
@@ -139,6 +174,8 @@ def get_elections():
                     ynr_url = "https://candidates.democracyclub.org.uk/media/candidates-%s.csv" % (election_id)
                     print(ynr_url)
 
+                    sopn_date = get_sopn_date(result)
+
                     try:
                         ynr_data = call_csv_api(ynr_url)
                         total_candidates = len(ynr_data)
@@ -156,6 +193,7 @@ def get_elections():
                             'url': "https://candidates.democracyclub.org.uk/election/%s/constituencies" % (election_id),
                             'post_id': None,
                             'locked': False,
+                            'sopn_published': str(sopn_date)
                         })
                     else:
                         for post in posts:
@@ -168,6 +206,7 @@ def get_elections():
                                 'url': "https://candidates.democracyclub.org.uk/election/%s/post/%s" % (election_id, post),
                                 'post_id': post,
                                 'locked': posts[post]['locked'],
+                                'sopn_published': str(sopn_date)
                             })
                     time.sleep(2)  # have a little snooze to avoid hammering the api
 
