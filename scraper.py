@@ -140,30 +140,39 @@ def get_posts(candidates):
     return posts
 
 
+def requires_country(election_type):
+    return election_type in ['local', 'parl']
+
+
 def get_sopn_date(result):
-    slug = result['election_id']
+    election_type, date_of_poll = type_and_poll_date(result['election_id'])
+
     territory = result['organisation']['territory_code']
 
-    country = {
+    countries = {
         "ENG": Country.ENGLAND,
         "WLS": Country.WALES,
         "SCT": Country.SCOTLAND,
         "NIR": Country.NORTHERN_IRELAND,
     }
 
-    if slug.startswith("local") and territory not in country:
+    if requires_country(election_type) and (territory is None or territory not in countries):
         return None
 
-    if slug.startswith("local") and territory is not None:
-
-        (_, date_of_poll) = type_and_poll_date(slug)
-
-        return SOPN_PUBLISH_DATE.local(
-            date_of_poll, country=country[territory]
-        )
+    if not requires_country(election_type):
+        try:
+            return SOPN_PUBLISH_DATE.for_id(result['election_id'])
+        except BaseException:
+            return None
     else:
-        return SOPN_PUBLISH_DATE.for_id(slug)
+        country = countries[territory]
 
+        if election_type == 'local':
+            return SOPN_PUBLISH_DATE.local(date_of_poll, country=country)
+        elif election_type == 'parl':
+            return SOPN_PUBLISH_DATE.uk_parliament(date_of_poll, country=country)
+        else:
+            return None
 
 def get_elections():
     elections = []
