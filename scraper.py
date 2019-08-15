@@ -211,7 +211,7 @@ def get_elections():
                             'url': "https://candidates.democracyclub.org.uk/election/%s/constituencies" % (election_id),
                             'post_id': None,
                             'locked': False,
-                            'sopn_published': str(sopn_date)
+                            'sopn_published': str(sopn_date) if sopn_date is not None else None
                         })
                     else:
                         for post in posts:
@@ -224,7 +224,7 @@ def get_elections():
                                 'url': "https://candidates.democracyclub.org.uk/election/%s/post/%s" % (election_id, post),
                                 'post_id': post,
                                 'locked': posts[post]['locked'],
-                                'sopn_published': str(sopn_date)
+                                'sopn_published': str(sopn_date) if sopn_date is not None else None
                             })
                     time.sleep(2)  # have a little snooze to avoid hammering the api
 
