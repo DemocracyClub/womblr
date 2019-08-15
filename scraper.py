@@ -80,6 +80,15 @@ def get_title():
 def format_date(d):
     return datetime.datetime.strptime(d, "%Y-%m-%d").strftime("%d/%m/%Y")
 
+def sopn_date_message(sopn_publish_date):
+    if sopn_publish_date is None:
+        return None
+
+    if sopn_publish_date < str(datetime.date.today()):
+        return " (SoPN should be published)"
+    else:
+        return " (SoPN due %s)" % format_date(sopn_publish_date)
+
 def get_slack_message(elections):
     # sort elections by date
     elections = sorted(elections, key=lambda k: k['poll_open_date'])
@@ -87,6 +96,8 @@ def get_slack_message(elections):
     # assemble slack mesages
     slack_messages = [get_emoji() + ' *' + get_title() + '* ' + get_emoji()]
     for election in elections:
+        sopn_message = sopn_date_message(election['sopn_published'])
+
         message = "%s: <%s|%s>. known candidates: %s" % (
             format_date(election['poll_open_date']),
             election['url'],
@@ -96,10 +107,8 @@ def get_slack_message(elections):
             message += " :womble: required"
         if 'locked' in election and election['locked']:
             message += " :lock:"
-        if election['sopn_published'] < str(datetime.date.today()):
-            message += " (SoPN should be published)"
-        else:
-            message += " (SoPN due %s)" % format_date(election['sopn_published'])
+        elif sopn_message is not None:
+            message += sopn_date_message(election['sopn_published'])
 
         slack_messages.append(message)
 
