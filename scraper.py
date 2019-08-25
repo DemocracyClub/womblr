@@ -7,7 +7,6 @@ import time
 from dateutil.relativedelta import relativedelta
 from polling_bot.brain import SlackClient
 from sopn_publish_date import StatementPublishDate, Country
-from sopn_publish_date.election_ids import type_and_poll_date
 
 # hack to override sqlite database filename
 # see: https://help.morph.io/t/using-python-3-with-morph-scraperwiki-fork/148
@@ -145,34 +144,22 @@ def requires_country(election_type):
 
 
 def get_sopn_date(result):
-    election_type, date_of_poll = type_and_poll_date(result['election_id'])
+    election_id = result['election_id']
 
     territory = result['organisation']['territory_code']
 
-    countries = {
+    country = {
         "ENG": Country.ENGLAND,
         "WLS": Country.WALES,
         "SCT": Country.SCOTLAND,
         "NIR": Country.NORTHERN_IRELAND,
-    }
+    }.get(territory, None)
 
-    if requires_country(election_type) and (territory is None or territory not in countries):
+    try:
+        return SOPN_PUBLISH_DATE.for_id(election_id, country=country)
+    except BaseException:
         return None
 
-    if not requires_country(election_type):
-        try:
-            return SOPN_PUBLISH_DATE.for_id(result['election_id'])
-        except BaseException:
-            return None
-    else:
-        country = countries[territory]
-
-        if election_type == 'local':
-            return SOPN_PUBLISH_DATE.local(date_of_poll, country=country)
-        elif election_type == 'parl':
-            return SOPN_PUBLISH_DATE.uk_parliament(date_of_poll, country=country)
-        else:
-            return None
 
 def get_elections():
     elections = []
