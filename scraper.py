@@ -7,6 +7,10 @@ import time
 from dateutil.relativedelta import relativedelta
 from polling_bot.brain import SlackClient
 from sopn_publish_date import StatementPublishDate, Country
+from sopn_publish_date.election_ids import (
+    InvalidElectionIdError,
+    NoSuchElectionTypeError,
+)
 
 # hack to override sqlite database filename
 # see: https://help.morph.io/t/using-python-3-with-morph-scraperwiki-fork/148
@@ -157,7 +161,7 @@ def get_sopn_date(result):
 
     try:
         return SOPN_PUBLISH_DATE.for_id(election_id, country=country)
-    except BaseException:
+    except (InvalidElectionIdError, NoSuchElectionTypeError):
         return None
 
 
