@@ -6,6 +6,11 @@ import requests
 import time
 from dateutil.relativedelta import relativedelta
 from polling_bot.brain import SlackClient
+from sopn_publish_date import StatementPublishDate, Country
+from sopn_publish_date.election_ids import (
+    InvalidElectionIdError,
+    NoSuchElectionTypeError,
+)
 
 # hack to override sqlite database filename
 # see: https://help.morph.io/t/using-python-3-with-morph-scraperwiki-fork/148
@@ -21,6 +26,7 @@ try:
 except KeyError:
     SLACK_WEBHOOK_URL = None
 NOW = datetime.datetime.now()
+SOPN_PUBLISH_DATE = StatementPublishDate()
 
 
 def init():
@@ -34,6 +40,7 @@ def init():
             locked BOOLEAN,
             name TEXT,
             known_candidates BIGINT,
+            sopn_published TEXT,
             CHECK (locked IN (0, 1))
         );""")
     scraperwiki.sql.execute("""
@@ -76,6 +83,15 @@ def get_title():
 def format_date(d):
     return datetime.datetime.strptime(d, "%Y-%m-%d").strftime("%d/%m/%Y")
 
+def sopn_date_message(sopn_publish_date):
+    if sopn_publish_date is None:
+        return None
+
+    if sopn_publish_date < str(datetime.date.today()):
+        return " (SoPN should be published)"
+    else:
+        return " (SoPN due %s)" % format_date(sopn_publish_date)
+
 def get_slack_message(elections):
     # sort elections by date
     elections = sorted(elections, key=lambda k: k['poll_open_date'])
@@ -83,6 +99,8 @@ def get_slack_message(elections):
     # assemble slack mesages
     slack_messages = [get_emoji() + ' *' + get_title() + '* ' + get_emoji()]
     for election in elections:
+        sopn_message = sopn_date_message(election['sopn_published'])
+
         message = "%s: <%s|%s>. known candidates: %s" % (
             format_date(election['poll_open_date']),
             election['url'],
@@ -92,6 +110,9 @@ def get_slack_message(elections):
             message += " :womble: required"
         if 'locked' in election and election['locked']:
             message += " :lock:"
+        elif sopn_message is not None:
+            message += sopn_date_message(election['sopn_published'])
+
         slack_messages.append(message)
 
     if len(slack_messages) > MAX_OUTPUT_LINES:
@@ -121,6 +142,29 @@ def get_posts(candidates):
             posts[candidate['post_id']]['known_candidates'] += 1
     return posts
 
+
+def requires_country(election_type):
+    return election_type in ['local', 'parl']
+
+
+def get_sopn_date(result):
+    election_id = result['election_id']
+
+    territory = result['organisation']['territory_code']
+
+    country = {
+        "ENG": Country.ENGLAND,
+        "WLS": Country.WALES,
+        "SCT": Country.SCOTLAND,
+        "NIR": Country.NORTHERN_IRELAND,
+    }.get(territory, None)
+
+    try:
+        return SOPN_PUBLISH_DATE.for_id(election_id, country=country)
+    except (InvalidElectionIdError, NoSuchElectionTypeError):
+        return None
+
+
 def get_elections():
     elections = []
     # get a list of upcoming elections
@@ -139,6 +183,8 @@ def get_elections():
                     ynr_url = "https://candidates.democracyclub.org.uk/media/candidates-%s.csv" % (election_id)
                     print(ynr_url)
 
+                    sopn_date = get_sopn_date(result)
+
                     try:
                         ynr_data = call_csv_api(ynr_url)
                         total_candidates = len(ynr_data)
@@ -156,6 +202,7 @@ def get_elections():
                             'url': "https://candidates.democracyclub.org.uk/election/%s/constituencies" % (election_id),
                             'post_id': None,
                             'locked': False,
+                            'sopn_published': str(sopn_date) if sopn_date is not None else None
                         })
                     else:
                         for post in posts:
@@ -168,6 +215,7 @@ def get_elections():
                                 'url': "https://candidates.democracyclub.org.uk/election/%s/post/%s" % (election_id, post),
                                 'post_id': post,
                                 'locked': posts[post]['locked'],
+                                'sopn_published': str(sopn_date) if sopn_date is not None else None
                             })
                     time.sleep(2)  # have a little snooze to avoid hammering the api
 
