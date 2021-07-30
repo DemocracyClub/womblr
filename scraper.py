@@ -26,6 +26,7 @@ try:
 except KeyError:
     SLACK_WEBHOOK_URL = None
 NOW = datetime.datetime.now()
+YNR_BASE = "https://candidates.democracyclub.org.uk"
 
 
 def init():
@@ -187,50 +188,31 @@ def get_ballots():
             ballot_id = ee_ballot["election_id"]
             sopn_date = get_sopn_date(ee_ballot)
 
-            ynr_ballot_url = (
-                "https://candidates.democracyclub.org.uk/api/next/ballots/{}/".format(
-                    ballot_id
-                )
-            )
+            ynr_ballot_url = "{}/api/next/ballots/{}/".format(YNR_BASE, ballot_id)
             print(ynr_ballot_url)
+
+            out_ballot = {
+                "timestamp": NOW,
+                "ballot_id": ballot_id,
+                "name": ee_ballot["election_title"],
+                "known_candidates": 0,
+                "poll_open_date": ee_ballot["poll_open_date"],
+                "url": "{}/elections/{}/".format(YNR_BASE, ballot_id),
+                "locked": False,
+                "sopn_published": str(sopn_date) if sopn_date is not None else None,
+                "has_sopn": False,
+            }
 
             try:
                 ynr_ballot = call_json_api(ynr_ballot_url)
             except requests.exceptions.HTTPError:
-                ballots.append(
-                    {
-                        "timestamp": NOW,
-                        "ballot_id": ballot_id,
-                        "name": ee_ballot["election_title"],
-                        "known_candidates": 0,
-                        "poll_open_date": ee_ballot["poll_open_date"],
-                        "url": "https://candidates.democracyclub.org.uk/elections/{}/".format(
-                            ballot_id
-                        ),
-                        "locked": False,
-                        "sopn_published": str(sopn_date)
-                        if sopn_date is not None
-                        else None,
-                        "has_sopn": False,
-                    }
-                )
+                ballots.append(out_ballot)
                 continue
 
-            ballots.append(
-                {
-                    "timestamp": NOW,
-                    "ballot_id": ballot_id,
-                    "name": ee_ballot["election_title"],
-                    "known_candidates": len(ynr_ballot["candidacies"]),
-                    "poll_open_date": ee_ballot["poll_open_date"],
-                    "url": "https://candidates.democracyclub.org.uk/elections/{}/".format(
-                        ballot_id
-                    ),
-                    "locked": ynr_ballot["candidates_locked"],
-                    "sopn_published": str(sopn_date) if sopn_date is not None else None,
-                    "has_sopn": bool(ynr_ballot["sopn"]),
-                }
-            )
+            out_ballot["known_candidates"] = len(ynr_ballot["candidacies"])
+            out_ballot["locked"] = ynr_ballot["candidates_locked"]
+            out_ballot["has_sopn"] = bool(ynr_ballot["sopn"])
+            ballots.append(out_ballot)
 
             time.sleep(2)  # have a little snooze to avoid hammering the api
 
