@@ -92,23 +92,23 @@ def get_sopn_message(ballot):
     else:
         return " (SoPN due %s)" % format_date(ballot['sopn_published'])
 
-def get_slack_message(elections):
-    # sort elections by date
-    elections = sorted(elections, key=lambda k: k['poll_open_date'])
+def get_slack_message(ballots):
+    # sort ballots by date
+    ballots = sorted(ballots, key=lambda k: k['poll_open_date'])
 
     # assemble slack mesages
     slack_messages = [get_emoji() + ' *' + get_title() + '* ' + get_emoji()]
-    for election in elections:
-        sopn_message = get_sopn_message(election)
+    for ballot in ballots:
+        sopn_message = get_sopn_message(ballot)
 
         message = "%s: <%s|%s>. known candidates: %s" % (
-            format_date(election['poll_open_date']),
-            election['url'],
-            election['name'],
-            election['known_candidates'])
-        if election['known_candidates'] == 0:
+            format_date(ballot['poll_open_date']),
+            ballot['url'],
+            ballot['name'],
+            ballot['known_candidates'])
+        if ballot['known_candidates'] == 0:
             message += " :womble: required"
-        if 'locked' in election and election['locked']:
+        if 'locked' in ballot and ballot['locked']:
             message += " :lock:"
         elif sopn_message is not None:
             message += sopn_message
