@@ -5,8 +5,9 @@ import requests
 import time
 from dateutil.relativedelta import relativedelta
 from polling_bot.brain import SlackClient
-from sopn_publish_date import StatementPublishDate, Country
-from sopn_publish_date.election_ids import (
+from uk_election_timetables.calendars import Country
+from uk_election_timetables.election_ids import from_election_id
+from uk_election_timetables.election_ids import (
     InvalidElectionIdError,
     NoSuchElectionTypeError,
 )
@@ -25,7 +26,6 @@ try:
 except KeyError:
     SLACK_WEBHOOK_URL = None
 NOW = datetime.datetime.now()
-SOPN_PUBLISH_DATE = StatementPublishDate()
 
 
 def init():
@@ -124,10 +124,10 @@ def get_slack_message(elections):
     return slack_message
 
 
-def get_sopn_date(result):
-    election_id = result['election_id']
+def get_sopn_date(ballot):
+    election_id = ballot['election_id']
 
-    territory = result['organisation']['territory_code']
+    territory = ballot['organisation']['territory_code']
 
     country = {
         "ENG": Country.ENGLAND,
@@ -137,7 +137,8 @@ def get_sopn_date(result):
     }.get(territory, None)
 
     try:
-        return SOPN_PUBLISH_DATE.for_id(election_id, country=country)
+        timetable = from_election_id(election_id, country=country)
+        return timetable.sopn_publish_date
     except (InvalidElectionIdError, NoSuchElectionTypeError):
         return None
 
