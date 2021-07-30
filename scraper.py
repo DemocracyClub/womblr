@@ -44,7 +44,8 @@ def init():
             name TEXT,
             known_candidates BIGINT,
             sopn_published TEXT,
-            CHECK (locked IN (0, 1))
+            has_sopn BOOLEAN,
+            CHECK (locked IN (0, 1) AND has_sopn IN (0, 1))
         );""")
 
     scraperwiki.sql.execute("""
@@ -80,14 +81,16 @@ def get_title():
 def format_date(d):
     return datetime.datetime.strptime(d, "%Y-%m-%d").strftime("%d/%m/%Y")
 
-def sopn_date_message(sopn_publish_date):
-    if sopn_publish_date is None:
+def get_sopn_message(ballot):
+    if ballot['sopn_published'] is None:
         return None
 
-    if sopn_publish_date < str(datetime.date.today()):
+    if ballot['has_sopn']:
+        return " (SoPN uploaded)"
+    elif ballot['sopn_published'] < str(datetime.date.today()):
         return " (SoPN should be published)"
     else:
-        return " (SoPN due %s)" % format_date(sopn_publish_date)
+        return " (SoPN due %s)" % format_date(ballot['sopn_published'])
 
 def get_slack_message(elections):
     # sort elections by date
@@ -96,7 +99,7 @@ def get_slack_message(elections):
     # assemble slack mesages
     slack_messages = [get_emoji() + ' *' + get_title() + '* ' + get_emoji()]
     for election in elections:
-        sopn_message = sopn_date_message(election['sopn_published'])
+        sopn_message = get_sopn_message(election)
 
         message = "%s: <%s|%s>. known candidates: %s" % (
             format_date(election['poll_open_date']),
@@ -108,7 +111,7 @@ def get_slack_message(elections):
         if 'locked' in election and election['locked']:
             message += " :lock:"
         elif sopn_message is not None:
-            message += sopn_date_message(election['sopn_published'])
+            message += sopn_message
 
         slack_messages.append(message)
 
@@ -177,7 +180,8 @@ def get_ballots():
                     'poll_open_date': ee_ballot['poll_open_date'],
                     'url': "https://candidates.democracyclub.org.uk/elections/{}/".format(ballot_id),
                     'locked': False,
-                    'sopn_published': str(sopn_date) if sopn_date is not None else None
+                    'sopn_published': str(sopn_date) if sopn_date is not None else None,
+                    'has_sopn': False,
                 })
                 continue
 
@@ -189,7 +193,8 @@ def get_ballots():
                 'poll_open_date': ee_ballot['poll_open_date'],
                 'url': "https://candidates.democracyclub.org.uk/elections/{}/".format(ballot_id),
                 'locked': ynr_ballot['candidates_locked'],
-                'sopn_published': str(sopn_date) if sopn_date is not None else None
+                'sopn_published': str(sopn_date) if sopn_date is not None else None,
+                'has_sopn': bool(ynr_ballot['sopn']),
             })
 
             time.sleep(2)  # have a little snooze to avoid hammering the api
