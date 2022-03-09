@@ -96,6 +96,10 @@ def format_date(d):
     return datetime.datetime.strptime(d, "%Y-%m-%d").strftime("%d/%m/%Y")
 
 
+def is_by_election(election_id):
+    return election_id.split(".")[-2] == "by"
+
+
 def get_sopn_message(ballot):
     if ballot["sopn_published"] is None:
         return None
@@ -176,6 +180,7 @@ def get_ballots():
             election
             for election in ee_data["results"]
             if election["identifier_type"] == "ballot"
+            and is_by_election(election["election_id"])
         ]
         for ee_ballot in ee_ballots:
             election_datetime = datetime.datetime.strptime(
