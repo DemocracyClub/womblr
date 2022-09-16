@@ -2,4 +2,4 @@ python-dateutil
 requests
 scraperwiki==0.5.1
 git+https://github.com/polling-bot-4000/polling-bot.git
-uk-election-timetables==2.2.2
+uk-election-timetables==2.2.4
