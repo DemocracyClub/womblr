@@ -25,6 +25,8 @@ try:
     SLACK_WEBHOOK_URL = os.environ["MORPH_ORINOCO_SLACK_WEBHOOK_URL"]
 except KeyError:
     SLACK_WEBHOOK_URL = None
+
+YNR_API_KEY = os.environ.get("YNR_API_KEY", None)
 NOW = datetime.datetime.now()
 YNR_BASE = "https://candidates.democracyclub.org.uk"
 
@@ -194,6 +196,8 @@ def get_ballots():
             sopn_date = get_sopn_date(ee_ballot)
 
             ynr_ballot_url = "{}/api/next/ballots/{}/".format(YNR_BASE, ballot_id)
+            if YNR_API_KEY:
+                ynr_ballot_url = f"{ynr_ballot_url}?auth_token={YNR_API_KEY}"
             print(ynr_ballot_url)
 
             out_ballot = {
