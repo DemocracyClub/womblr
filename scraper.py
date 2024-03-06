@@ -197,7 +197,7 @@ def get_ballots():
 
             ynr_ballot_url = "{}/api/next/ballots/{}/".format(YNR_BASE, ballot_id)
             if YNR_API_KEY:
-                ynr_ballot_url = f"{ynr_ballot_url}?auth_token={YNR_API_KEY}"
+                ynr_ballot_url = "{}?auth_token={}".format(ynr_ballot_url, YNR_API_KEY)
             print(ynr_ballot_url)
 
             out_ballot = {
