@@ -5,12 +5,6 @@ import requests
 import time
 from dateutil.relativedelta import relativedelta
 from polling_bot.brain import SlackClient
-from uk_election_timetables.calendars import Country
-from uk_election_timetables.election_ids import from_election_id
-from uk_election_timetables.election_ids import (
-    InvalidElectionIdError,
-    NoSuchElectionTypeError,
-)
 
 # hack to override sqlite database filename
 # see: https://help.morph.io/t/using-python-3-with-morph-scraperwiki-fork/148
@@ -146,25 +140,6 @@ def get_slack_message(ballots):
     return slack_message
 
 
-def get_sopn_date(ballot):
-    election_id = ballot["election_id"]
-
-    territory = ballot["organisation"]["territory_code"]
-
-    country = {
-        "ENG": Country.ENGLAND,
-        "WLS": Country.WALES,
-        "SCT": Country.SCOTLAND,
-        "NIR": Country.NORTHERN_IRELAND,
-    }.get(territory, None)
-
-    try:
-        timetable = from_election_id(election_id, country=country)
-        return timetable.sopn_publish_date
-    except (InvalidElectionIdError, NoSuchElectionTypeError):
-        return None
-
-
 def get_ballots():
     ballots = []
     # get a list of upcoming elections
@@ -193,7 +168,7 @@ def get_ballots():
                 continue
 
             ballot_id = ee_ballot["election_id"]
-            sopn_date = get_sopn_date(ee_ballot)
+            sopn_date = ee_ballot["timetable"]["close_of_nominations"]
 
             ynr_ballot_url = "{}/api/next/ballots/{}/".format(YNR_BASE, ballot_id)
             if YNR_API_KEY:
